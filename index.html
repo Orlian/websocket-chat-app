@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Socket.IO chat</title>
+    <style>
+        body {
+            margin: 0;
+            padding-bottom: 3rem;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        #room-form {
+            background: rgba(0, 0, 0, 0.15);
+            padding: 0.25rem;
+            position: fixed;
+            top: 3rem;
+            right: 0;
+            display: flex;
+            height: 3rem;
+            box-sizing: border-box;
+            backdrop-filter: blur(10px);
+        }
+
+        #room-input button {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+        }
+
+        #room-input:hover {
+            display: block;
+        }
+
+        .dropdown-content a:hover {
+            background-color: #ddd;
+        }
+
+        #nickname-form {
+            background: rgba(0, 0, 0, 0.15);
+            padding: 0.25rem;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            height: 3rem;
+            box-sizing: border-box;
+            backdrop-filter: blur(10px);
+        }
+
+        #user-list {
+            background: rgba(0, 0, 0, 0.15);
+            padding: 0.1rem;
+            position: fixed;
+            top: 5rem;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            list-style-type: none;
+            height: auto;
+            box-sizing: border-box;
+            backdrop-filter: blur(10px);
+        }
+
+        #form {
+            background: rgba(0, 0, 0, 0.15);
+            padding: 0.25rem;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            height: 3rem;
+            box-sizing: border-box;
+            backdrop-filter: blur(10px);
+        }
+
+        #input, #nickname-input {
+            border: none;
+            padding: 0 1rem;
+            flex-grow: 1;
+            border-radius: 2rem;
+            margin: 0.25rem;
+        }
+
+        #input:focus {
+            outline: none;
+        }
+
+        #form > button, #nickname-form > button {
+            background: #333;
+            border: none;
+            padding: 0 1rem;
+            margin: 0.25rem;
+            border-radius: 3px;
+            outline: none;
+            color: #fff;
+        }
+
+        #messages {
+            list-style-type: none;
+            margin: 3rem 0 0 0;
+            padding: 0;
+        }
+
+        #messages > li {
+            padding: 0.5rem 1rem;
+        }
+
+        #messages > li:nth-child(odd) {
+            background: #efefef;
+        }
+    </style>
+</head>
+<body>
+<form id="nickname-form" action="">
+    <input id="nickname-input" autocomplete="off" placeholder="Your nickname here..."/>
+    <button>Send</button>
+</form>
+<form id="room-form" action="">
+    <select id="room-input">
+        <option value="Living Room" selected>Living Room</option>
+        <option value="Kitchen">Kitchen</option>
+        <option value="Game Room">Game Room</option>
+        <option value="Bedroom">Bedroom</option>
+    </select>
+    <button>Select</button>
+</form>
+<ul id="user-list"></ul>
+<ul id="messages"></ul>
+<form id="form" action="">
+    <input id="input" autocomplete="off" placeholder="Say something nice..."/>
+    <button>Send</button>
+</form>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  let socket = io();
+
+  let nicknameForm = document.getElementById('nickname-form');
+  let nicknameInput = document.getElementById('nickname-input');
+  let nickname = 'Anon' + Math.floor(Math.random() * 1000000);
+  let messages = document.getElementById('messages');
+  let form = document.getElementById('form');
+  let input = document.getElementById('input');
+  let roomForm = document.getElementById('room-form');
+  let roomInput = document.getElementById('room-input');
+  let userUl = document.getElementById('user-list');
+  let room = 'Living Room';
+
+  socket.emit('serverMessage', {msg: `You have joined the ${room}`});
+  socket.emit('addToUsers', {user: nickname, room: room});
+
+  nicknameForm.addEventListener('submit', (evt) => {
+    evt.preventDefault();
+    if (nicknameInput.value && nickname !== nicknameInput.value) {
+      nickname = nicknameInput.value;
+      nicknameInput.setAttribute('placeholder', nicknameInput.value);
+      socket.emit('changeNickname', {user: nickname, room: room});
+      socket.emit('serverMessage', {msg: `You have changed your nickname to ${nickname}`});
+      nicknameInput.value = '';
+    }
+  });
+
+  roomForm.addEventListener('submit', (evt) => {
+    evt.preventDefault();
+    let previousRoom = room;
+    room = roomInput.value;
+    console.log('Room input value:', room);
+    messages.innerHTML = '';
+    socket.emit('goToRoom', {room: room, previousRoom: previousRoom});
+    if (room !== previousRoom) {
+      socket.emit('serverMessage', {msg: `You have joined the ${room}`});
+    }
+  });
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (input.value) {
+      socket.emit('chat message', {msg: nickname + ' says: ' + input.value, room: room});
+      input.value = '';
+    }
+  });
+
+  socket.on('chat message', (msg) => {
+    let item = document.createElement('li');
+    item.textContent = msg;
+    messages.appendChild(item);
+    window.scrollTo(0, document.body.scrollHeight);
+  });
+
+  socket.on('goToRoom', (roomName) => {
+    console.log('You joined the ' + roomName);
+  });
+
+  socket.on('serverMessage', (msg) => {
+    let item = document.createElement('li');
+    item.textContent = msg;
+    messages.appendChild(item);
+    window.scrollTo(0, document.body.scrollHeight);
+  });
+
+  socket.on('addToUsers', (userList) => {
+    userUl.innerHTML = `<strong>Users on this server: ${userList.length}</strong>`;
+    for (const user of userList) {
+      console.log('user of userList', user);
+      let item = document.createElement('li');
+      item.textContent = user.user;
+      userUl.appendChild(item);
+    }
+  });
+
+</script>
+</body>
+</html>
